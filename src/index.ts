@@ -123,7 +123,7 @@ const getDate = () => {
 const getCarpetLink = async () => {
   // get json from github api
   const response = await (await fetch(
-    "https://api.github.com/repos/gnembon/carpetmod112/releases/latest"
+    "https://api.github.com/repos/gnembon/fabric-carpet/releases/latest"
   )).json();
   // lots of validation
   if (typeof response !== "object" || !("assets" in response)) {
@@ -132,12 +132,22 @@ const getCarpetLink = async () => {
   const { assets } = response;
   if (
     typeof assets !== "object" ||
-    !Array.isArray(assets) ||
-    assets.length !== 1
+    !Array.isArray(assets) 
   ) {
     throw new Error("Github response failure 2");
   }
-  const asset = assets[0];
+  var asset = assets[0];
+  for (var val of assets) {
+    var name = val.name;
+    if(name.startsWith("fabric-carpet-1.15.2")){
+        var version = parseInt(name.substring(name.indexOf("v") + 1 ,name.indexOf(".jar")));
+        var versionOld = parseInt(asset.name.substring(asset.name.indexOf("v") + 1 ,asset.name.indexOf(".jar")));
+        if(version > versionOld){
+          asset = val;
+        }
+    }
+  }
+ 
   if (!("browser_download_url" in asset)) {
     throw new Error("Github response failure 3");
   }
@@ -148,27 +158,37 @@ const getCarpetLink = async () => {
   return url;
 };
 
-const downloadMinecraft = async (force: boolean = false) => {
-  const serverFile = path.join(mcFolder, "MinecraftServer.jar");
+const downloadFabric = async (force: boolean = false) => {
+  const fabricFile = path.join(mcFolder, "fabric-server-launch.jar");
   // if force is set to true, don't check if the file already exists
   if (!force) {
     try {
       // try to read file. if doesn't exist, continue to downloading it
-      return await fs.readFile(serverFile);
+      return await fs.readFile(fabricFile);
     } catch (e) {}
   }
   // get jar contents
   const url =
-    "https://launcher.mojang.com/mc/game/1.12.2/server/886945bfb2b978778c3a0288fd7fab09d315b25f/server.jar";
+    "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.6.0.43/fabric-installer-0.6.0.43.jar";
   const response = await rp(url, { encoding: null });
   // save it to file
-  await fs.writeFile(serverFile, response);
+  await fs.writeFile(path.join(mcFolder,"fabric-installer.jar"), response);
+
+  const command = `java -jar fabric-installer.jar server -mcversion 1.15.2 -downloadMinecraft`;
+  // run fabric installer + install mc server instance 
+  const exec = require("child_process").execSync;
+  await exec(command, { cwd: mcFolder });
   // return file contents
-  return response;
+  return await fs.readFile(fabricFile);
 };
 
 const downloadCarpet = async (force: boolean = false) => {
-  const carpetFile = path.join(mcFolder, "carpet.jar");
+  try{
+    fs.accessSync(mcFolder + "/mods");
+  }catch(e){
+    fs.mkdirSync(mcFolder+ "/mods");
+  }
+  const carpetFile = path.join(mcFolder+ "/mods", "fabric-carpet.jar");
   // if force is set to true, don't check if the file already exists
   if (!force) {
     try {
@@ -182,42 +202,25 @@ const downloadCarpet = async (force: boolean = false) => {
   const response = await rp(url, { encoding: null });
   // save contents to disc
   await fs.writeFile(carpetFile, response);
-  // return file contents
-  return response;
 };
 
-const getMergedCarpet = async (force: boolean = false) => {
-  const mergedFile = path.resolve(path.join(mcFolder, "server.jar"));
-  const updateFolder = path.join(mcFolder, "update");
-  try{
-    await fs.access(updateFolder);
-  }catch(e){
-    await fs.mkdir(updateFolder);
-  }
-  const files = await fs.readdir(updateFolder)
-  const carpetFile = files.find(file => file.match(/^Carpet\.[^.]+\.jar$/));
-  if(carpetFile){
-    const pathCarpetFile = path.join(updateFolder, carpetFile);
-    await fse.copyAsync(pathCarpetFile, mergedFile);
-    await fse.removeAsync(pathCarpetFile);
-  }
+const getFabric = async (force: boolean = false) => {
+  const fabricFile = path.resolve(path.join(mcFolder, "fabric-server-launch.jar"));
+  const carpetFile = path.resolve(path.join(mcFolder + "/mods", "fabric-carpet.jar"));
+
   // if force is set to true, don't check if the file already exists
   if (!force) {
     try {
-      await fs.access(mergedFile);
-      return mergedFile;
+      await fs.access(fabricFile);
+      await fs.access(carpetFile);
+      return fabricFile;
     } catch (e) {}
   }
-  // create empty archive
-  const z = jszip();
-  // get minecraft jar contents and extract it into archive
-  await z.loadAsync(await downloadMinecraft());
-  // get carpet jar and concatenate it into archive
-  await z.loadAsync(await downloadCarpet(force));
-  // write file to disc
-  await fs.writeFile(mergedFile, await z.generateAsync({ type: "nodebuffer" }));
-  // return concatenated jar path
-  return mergedFile;
+  
+  await downloadFabric();
+  await downloadCarpet(force);
+  
+  return fabricFile;
 };
 
 const getBackupList = async () => {
@@ -255,7 +258,7 @@ const startServer = async (forceUpdate: boolean = false) => {
     // wait 10 sec before starting server
     await new Promise((resolve) => setTimeout(resolve, 10000));
     // get jar file path
-    const serverFullPath = await getMergedCarpet(forceUpdate);
+    const serverFullPath = await getFabric(forceUpdate);
     // run without gui
     const command = `java ${args._.join(" ")} -jar "${serverFullPath}" nogui`;
     // start child process with MC with CWD set to minecraft folder
