@@ -4,7 +4,7 @@ import fs from "mz/fs";
 import rp from "request-promise-native";
 import jszip from "jszip";
 import path, { join } from "path";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import WebSocket from "ws";
 import fse from "fs-extra-promise";
 import minimist from 'minimist';
@@ -260,9 +260,8 @@ const startServer = async (forceUpdate: boolean = false) => {
     // get jar file path
     const serverFullPath = await getFabric(forceUpdate);
     // run without gui
-    const command = `java ${args._.join(" ")} -jar "${serverFullPath}" nogui`;
     // start child process with MC with CWD set to minecraft folder
-    const child = exec(command, { cwd: mcFolder });
+    const child = spawn('java', ['-jar'].concat(args._).concat([ serverFullPath, 'nogui' ]) , { cwd: mcFolder });
     const { stdout, stderr, stdin } = child;
     // if stdio of that process didn't open, something went wrong
     if (!stdin || !stdout || !stderr) {
