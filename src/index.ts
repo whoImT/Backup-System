@@ -139,10 +139,10 @@ const getCarpetLink = async () => {
   var asset = assets[0];
   for (var val of assets) {
     var name = val.name;
-    if(name.startsWith("fabric-carpet-1.15.2")){
+    if(name.startsWith("fabric-carpet-1.16.2")){
         var version = parseInt(name.substring(name.indexOf("v") + 1 ,name.indexOf(".jar")));
         var versionOld = parseInt(asset.name.substring(asset.name.indexOf("v") + 1 ,asset.name.indexOf(".jar")));
-        if(version > versionOld){
+        if(version > versionOld || !asset.name.startsWith("fabric-carpet-1.16.2")){
           asset = val;
         }
     }
@@ -169,12 +169,12 @@ const downloadFabric = async (force: boolean = false) => {
   }
   // get jar contents
   const url =
-    "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.6.0.43/fabric-installer-0.6.0.43.jar";
+    "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.6.1.45/fabric-installer-0.6.1.45.jar";
   const response = await rp(url, { encoding: null });
   // save it to file
   await fs.writeFile(path.join(mcFolder,"fabric-installer.jar"), response);
 
-  const command = `java -jar fabric-installer.jar server -mcversion 1.15.2 -downloadMinecraft`;
+  const command = `java -jar fabric-installer.jar server -mcversion 1.16.2 -downloadMinecraft`;
   // run fabric installer + install mc server instance 
   const exec = require("child_process").execSync;
   await exec(command, { cwd: mcFolder });
@@ -308,7 +308,7 @@ const startServer = async (forceUpdate: boolean = false) => {
 
       stdout.on("data", data => {
         // #bridge
-        const match = data.match(
+        const match = String(data).match(
           /\[\d\d:\d\d:\d\d\] \[Server thread\/INFO\]: <([^>]+)> ([^\n\r]+)[\r\n]/
         );
         if (match) {
